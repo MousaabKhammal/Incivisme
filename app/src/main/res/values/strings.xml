@@ -4,12 +4,12 @@
     <string name="llistat">Llistat</string>
     <string name="mapa">Mapa</string>
     <string name="home">Home</string>
-    <string name="get_location">Comença a seguir la ubicació</string>
     <string name="localitzacio">localitzacio</string>
     <string name="location_text">"Latitud: %1$.4f\nLongitud: %2$.4f\nHora: %3$tr"</string>
     <string name="address_text">"Direcció: %1$s\nHora: %2$tr"</string>
     <string name="loading">\"Carregant...\"</string>
     <!-- TODO: Remove or change this placeholder text -->
     <string name="hello_blank_fragment">Hello blank fragment</string>
-
+    <string name="textview_hint">Localització</string>
+    <string name="Comença_a_seguir_la_ubicació">Comença a seguir la ubicació</string>
 </resources>
