@@ -1,8 +1,8 @@
 package com.example.incivisme;
 
 import android.Manifest;
+import android.annotation.SuppressLint;
 import android.content.pm.PackageManager;
-import android.location.Location;
 import android.os.Bundle;
 
 import androidx.annotation.NonNull;
@@ -16,8 +16,16 @@ import android.widget.Button;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
+
+import com.firebase.ui.auth.AuthUI;
 import com.google.android.gms.location.FusedLocationProviderClient;
+import com.google.android.gms.location.LocationCallback;
+import com.google.android.gms.location.LocationRequest;
+import com.google.android.gms.location.LocationResult;
 import com.google.android.gms.location.LocationServices;
+import com.google.firebase.auth.FirebaseAuth;
+
+import java.util.Arrays;
 
 /**
  * A simple {@link Fragment} subclass.
@@ -27,24 +35,17 @@ import com.google.android.gms.location.LocationServices;
 public class NotificarFragment extends Fragment implements  FetchAddressTask.OnTaskCompleted {
 
     private static final int REQUEST_LOCATION_PERMISSION = 1;
-    private final String TAG = this.getClass().getSimpleName();
-    private String mParam1;
-    private String mParam2;
     private Button button;
-    private Location mLastLocation;
     private FusedLocationProviderClient mFusedLocationClient; //Sirve para interactuar con el proveedor de ubicación fusionada.
     private TextView mLocationTextView;
     private ProgressBar mLoading;
-    private boolean mTrackingLocation;
+    private boolean mTrackingLocation = false;
+    private LocationCallback mLocationCallback;
 
 
 
     public NotificarFragment() {
         // Required empty public constructor
-    }
-
-    public TextView getmLocationTextView() {
-        return mLocationTextView;
     }
 
     /**
@@ -55,8 +56,7 @@ public class NotificarFragment extends Fragment implements  FetchAddressTask.OnT
      */
     // TODO: Rename and change types and number of parameters
     public static NotificarFragment newInstance() {
-        NotificarFragment fragment = new NotificarFragment();
-        return fragment;
+        return new NotificarFragment();
     }
 
     @Override
@@ -74,16 +74,29 @@ public class NotificarFragment extends Fragment implements  FetchAddressTask.OnT
 
         mLocationTextView = (v.findViewById(R.id.localitzacio));
         mLoading = v.findViewById(R.id.loading);
-        
+
         button =  v.findViewById(R.id.button_location);
         button.setOnClickListener(v1 -> {
-            Toast.makeText(getContext(), "Location", Toast.LENGTH_SHORT).show();
-            startTrackingLocation();
-
+            if (!mTrackingLocation) {
+                startTrackingLocation();
+            } else {
+                stopTrackingLocation();
+            }
         });
+        //crear objeto LocationCallback
+        mLocationCallback = new LocationCallback(){
+            @Override
+            public void onLocationResult(LocationResult locationResult) {
+                if (mTrackingLocation) {
+                    new FetchAddressTask(getContext(), NotificarFragment.this)
+                            .execute(locationResult.getLastLocation());
+                }
+            }
+        };
         return v;
     }
 
+    @SuppressLint("SetTextI18n")
     private void startTrackingLocation() {
         //inicializar el mFusedLocationClient
         mFusedLocationClient = LocationServices.getFusedLocationProviderClient(getContext());
@@ -93,25 +106,37 @@ public class NotificarFragment extends Fragment implements  FetchAddressTask.OnT
                             {Manifest.permission.ACCESS_FINE_LOCATION},
                     REQUEST_LOCATION_PERMISSION);
         } else {
-            mFusedLocationClient.getLastLocation().addOnSuccessListener(
-                    location -> {
-                        if (location != null) {
-                            //ejecutamos la geocodificacion inversa
-                            new FetchAddressTask(getContext(), this::onTaskCompleted).execute(location);
-                            mLocationTextView.setText(
-                                    getString(R.string.address_text,
-                                            getString(R.string.loading),
-                                            System.currentTimeMillis()));
+            mFusedLocationClient.requestLocationUpdates(getLocationRequest(), mLocationCallback, null);
 
-                        } else {
-                            mLocationTextView.setText("Sense localització coneguda");
-                        }
-                    });
         }
+        mLoading.setVisibility(ProgressBar.VISIBLE);
+        mTrackingLocation = true;
+        button.setText("Aturar el seguiment de la ubicació");
     }
 
+    /**
+     * Método que deja de rastrear el dispositivo. Elimina la ubicación
+     * actualiza, detiene la animación y restablece la interfaz de usuario.
+     */
+    @SuppressLint("SetTextI18n")
     private void stopTrackingLocation(){
+        if (mTrackingLocation) {
+            mTrackingLocation = false;
+            button.setText("Comença a seguir la ubicació");
+            mLocationTextView.setText(R.string.textview_hint);
+            mLoading.setVisibility(ProgressBar.INVISIBLE);
+        }
+        mFusedLocationClient.removeLocationUpdates(mLocationCallback);
 
+    }
+
+    //Crear LocationRequest
+    private LocationRequest getLocationRequest(){
+        LocationRequest locationRequest = new LocationRequest();
+        locationRequest.setInterval(10000);//establece el intervalo en el que desea obtener ubicaciones
+        locationRequest.setFastestInterval(5000); //si una ubicación está disponible antes, puede obtenerla (es decir, otra aplicación está utilizando los servicios de ubicación)
+        locationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
+        return locationRequest;
     }
 
     private void permisoLocationDenegado(){
@@ -140,6 +165,23 @@ public class NotificarFragment extends Fragment implements  FetchAddressTask.OnT
     @Override
     public void onTaskCompleted(String result) {
         //actualizar el textview "address_text" con la direccion y la ora resultantes
-        mLocationTextView.setText(getString(R.string.address_text, result, System.currentTimeMillis()));
+        mLocationTextView.setText(getString(R.string.address_text,
+                result, System.currentTimeMillis()));
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        if (mTrackingLocation) {
+            startTrackingLocation();
+        }
+    }
+
+    @Override
+    public void onPause() {
+        super.onPause();
+        if (mTrackingLocation) {
+            stopTrackingLocation();
+        }
     }
 }
